@@ -1,0 +1,213 @@
+#!/usr/bin/env python3
+"""mc-report: agent to mission control event reporter."""
+
+import hashlib
+import json
+import os
+import sys
+import urllib.request
+
+MC_URL = os.environ.get("MC_URL", "http://127.0.0.1:3030")
+DEBUG = os.environ.get("MC_DEBUG") == "1"
+
+
+def debug(msg):
+    if DEBUG:
+        print(msg, file=sys.stderr)
+
+
+def normalize(s, n):
+    if s is None:
+        return None
+    s = " ".join(s.split())
+    if len(s) > n:
+        s = s[:n]
+    return s
+
+
+def send(payload):
+    payload = {k: v for k, v in payload.items() if v is not None}
+    data = json.dumps(payload).encode()
+    req = urllib.request.Request(
+        f"{MC_URL}/api/events",
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        urllib.request.urlopen(req, timeout=6)
+    except Exception as e:
+        debug(f"mc-report: send failed: {e}")
+
+
+def read_stdin():
+    try:
+        return json.loads(sys.stdin.read())
+    except Exception:
+        return {}
+
+
+def handle_claude():
+    if len(sys.argv) < 3:
+        return
+    event_arg = sys.argv[2]
+    payload = read_stdin()
+    session_id = payload.get("session_id", "claude-unknown")
+    cwd = payload.get("cwd")
+
+    if event_arg == "prompt":
+        prompt = payload.get("prompt", "")
+        title = normalize(prompt, 120)
+        send({
+            "agent": "claude",
+            "session_id": session_id,
+            "event": "prompt",
+            "title": title,
+            "cwd": cwd,
+        })
+    elif event_arg == "turn_end":
+        send({
+            "agent": "claude",
+            "session_id": session_id,
+            "event": "turn_end",
+            "cwd": cwd,
+        })
+    elif event_arg == "approval_request":
+        message = payload.get("message", "")
+        if not message:
+            return
+        lower = message.lower()
+        if not any(kw in lower for kw in ["permission", "approval", "waiting for your input"]):
+            return
+        send({
+            "agent": "claude",
+            "session_id": session_id,
+            "event": "approval_request",
+            "detail": message,
+            "cwd": cwd,
+        })
+
+
+def handle_hermes():
+    if len(sys.argv) < 3:
+        return
+    event_arg = sys.argv[2]
+    payload = read_stdin()
+    session_id = payload.get("session_id", "hermes-unknown")
+    cwd = payload.get("cwd")
+
+    if event_arg == "prompt":
+        extra = payload.get("extra", {})
+        if not extra.get("is_first_turn", True):
+            return
+        title = normalize(extra.get("user_message"), 120)
+        send({
+            "agent": "hermes",
+            "session_id": session_id,
+            "event": "prompt",
+            "title": title,
+            "model": extra.get("model"),
+            "cwd": cwd,
+        })
+    elif event_arg == "session_start":
+        send({
+            "agent": "hermes",
+            "session_id": session_id,
+            "event": "session_start",
+            "cwd": cwd,
+        })
+    elif event_arg == "session_end":
+        send({
+            "agent": "hermes",
+            "session_id": session_id,
+            "event": "session_end",
+            "cwd": cwd,
+        })
+    elif event_arg == "approval_request":
+        extra = payload.get("extra", {})
+        detail = extra.get("description") or extra.get("command") or "approval requested"
+        send({
+            "agent": "hermes",
+            "session_id": session_id,
+            "event": "approval_request",
+            "detail": detail,
+            "cwd": cwd,
+        })
+    elif event_arg == "approval_response":
+        extra = payload.get("extra", {})
+        detail = extra.get("choice", "")
+        send({
+            "agent": "hermes",
+            "session_id": session_id,
+            "event": "approval_response",
+            "detail": detail,
+            "cwd": cwd,
+        })
+
+
+def handle_codex():
+    payload = None
+    for arg in sys.argv[2:]:
+        try:
+            parsed = json.loads(arg)
+            if isinstance(parsed, dict):
+                payload = parsed
+                break
+        except Exception:
+            continue
+
+    if not payload:
+        return
+
+    if payload.get("type") != "agent-turn-complete":
+        return
+
+    turn_id = payload.get("turn-id") or payload.get("thread-id") or ""
+    if turn_id:
+        session_id = "codex-" + turn_id
+    else:
+        h = hashlib.sha256(json.dumps(payload.get("input-messages", [])).encode()).hexdigest()[:12]
+        session_id = "codex-" + h
+
+    input_messages = payload.get("input-messages", [])
+    last_assistant = payload.get("last-assistant-message", "")
+
+    first_input = input_messages[0] if input_messages else ""
+    title = normalize(first_input, 120)
+    send({
+        "agent": "codex",
+        "session_id": session_id,
+        "event": "prompt",
+        "title": title,
+    })
+
+    detail = normalize(last_assistant, 200)
+    send({
+        "agent": "codex",
+        "session_id": session_id,
+        "event": "turn_end",
+        "detail": detail,
+    })
+
+
+def main():
+    if len(sys.argv) < 2:
+        return
+    mode = sys.argv[1]
+    if mode == "claude":
+        handle_claude()
+    elif mode == "hermes":
+        handle_hermes()
+    elif mode == "codex":
+        handle_codex()
+    else:
+        debug(f"mc-report: unknown mode {mode}")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        debug(f"mc-report: error: {e}")
+    finally:
+        sys.exit(0)

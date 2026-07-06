@@ -1,0 +1,11 @@
+/target
+.env
+.env.local
+.DS_Store
+.gstack/
+.claude/
+.agents/
+skills-lock.json
+agent-mission-control-demo/
+/index.html
+docs/backup-*.json

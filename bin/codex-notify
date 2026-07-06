@@ -1,0 +1,4 @@
+#!/bin/bash
+# forward to the original computer-use notifier, then report to mission control
+"/Users/siddharthceri/.codex/computer-use/Codex Computer Use.app/Contents/SharedSupport/SkyComputerUseClient.app/Contents/MacOS/SkyComputerUseClient" turn-ended "$@" >/dev/null 2>&1 &
+exec /Users/siddharthceri/Documents/hermes-mission-control/bin/mc-report codex "$@"
