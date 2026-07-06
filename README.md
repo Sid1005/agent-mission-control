@@ -76,12 +76,14 @@ cargo run --release          # serves http://127.0.0.1:3030
 # 3. wire your agents' hooks at bin/mc-report (see table above)
 ```
 
-On macOS I keep it permanent via launchd:
+On macOS I keep it permanent via launchd, with `bin/deploy` doing build → install → restart:
 
 ```bash
-launchctl load ~/Library/LaunchAgents/com.siddharth.mission-control.plist
+bin/deploy        # cargo build, copy binary+static to ~/.local/opt/mission-control, restart launchd
 tail -f ~/Library/Logs/mission-control.log
 ```
+
+> **Gotcha that cost an evening:** launchd cannot exec a binary that lives inside `~/Documents` — macOS TCC stalls the spawn *inside dyld*, forever, with no error anywhere. The process shows as running but never reaches `main`. That's why the runtime is deployed to `~/.local/opt/mission-control` instead of running from `target/`. Relatedly, the DB pool is `connect_lazy` so a slow DNS answer (IPv6-first on an IPv4-only network) can never keep the listener from binding.
 
 ## Repo map
 

@@ -295,11 +295,14 @@ async fn main() {
     let database_url =
         std::env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env");
 
-    let pool = PgPool::connect(&database_url)
-        .await
-        .expect("Failed to connect to database");
-
-    println!("Connected to database");
+    // Lazy pool: bind the listener immediately and connect on first query.
+    // An eager connect can hang for minutes at boot when DNS returns
+    // unreachable IPv6 addresses first, leaving the dashboard dark.
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(5)
+        .acquire_timeout(std::time::Duration::from_secs(15))
+        .connect_lazy(&database_url)
+        .expect("Invalid DATABASE_URL");
 
     let state = AppState { pool };
 

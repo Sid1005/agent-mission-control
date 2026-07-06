@@ -1,0 +1,23 @@
+#!/bin/bash
+# Build and deploy mission control to its runtime home, then restart launchd.
+#
+# The runtime lives OUTSIDE the repo (~/.local/opt/mission-control) on purpose:
+# launchd cannot exec a binary inside ~/Documents — macOS TCC stalls the spawn
+# in dyld indefinitely and the dashboard silently never comes up.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+RUNTIME="$HOME/.local/opt/mission-control"
+PLIST="$HOME/Library/LaunchAgents/com.siddharth.mission-control.plist"
+
+cargo build --release
+mkdir -p "$RUNTIME"
+ditto target/release/hermes-mission-control "$RUNTIME/server"
+ditto static "$RUNTIME/static"
+codesign -s - -f "$RUNTIME/server"
+[ -f "$RUNTIME/.env" ] || { grep -E '^DATABASE_URL' .env > "$RUNTIME/.env"; }
+
+launchctl unload "$PLIST" 2>/dev/null || true
+launchctl load "$PLIST"
+sleep 2
+curl -sf -m 15 http://127.0.0.1:3030/api/stats && echo " ✓ deployed"

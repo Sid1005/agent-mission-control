@@ -9,3 +9,4 @@ skills-lock.json
 agent-mission-control-demo/
 /index.html
 docs/backup-*.json
+bin/mission-control-server
