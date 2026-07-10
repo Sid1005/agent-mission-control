@@ -1,6 +1,6 @@
 # Agent Mission Control
 
-Agent Mission Control is the ops room for my AI agents. Every task any of them runs — **Claude Code**, **Codex**, or **Hermes** — shows up here the moment it starts: what's running right now, what's queued, what's blocked waiting for my approval, and what finished or failed while I wasn't looking.
+Agent Mission Control is the control room for my AI agents. Every task any of them runs, **Claude Code**, **Codex**, or **Hermes**, shows up here the moment it starts: what's running right now, what's queued, what's blocked waiting for my approval, and what finished or failed while I wasn't looking.
 
 Dashboard: **http://127.0.0.1:3030** — three tabs: **Tasks / Calendar / Agents**.
 
@@ -14,11 +14,9 @@ Dashboard: **http://127.0.0.1:3030** — three tabs: **Tasks / Calendar / Agents
 
 ## Why this exists
 
-I run multiple coding agents in parallel, in different terminals, on different machines. Each one is happy to tell you what it's doing — *if you're staring at its terminal*. Nobody stares at four terminals.
+I run multiple coding agents in parallel, in different terminals, on different machines. 
 
-So every agent reports into one place. When Claude picks up a prompt, a mission card flips to **Right Now**. When Codex finishes a turn, its card completes. When any agent stops to ask permission, the card lands in **Approval** — which is the column I actually care about, because a blocked agent is a stalled pipeline.
-
-Dash (my life OS) is for *human* intent — what I want done. Mission Control is for *operational* status — what the machines are doing about it. Dash hands tickets to agents through `POST /handoff`, and from that moment the ticket lives here.
+So every agent reports into one place. When Claude picks up a prompt, a mission card flips to **Right Now**. When Codex finishes a turn, its card completes. When any agent stops to ask permission, the card lands in **Approval** — which is the column I actually care about, because a blocked agent is a bottleneck.
 
 ## Architecture
 
